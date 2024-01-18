@@ -4,15 +4,18 @@
 # and tag test images such as pg_auto_failover_test:pg14.
 #
 ARG PGVERSION=14
+ARG DEBIAN=bullseye
+ARG CITUSTAG=v12.1.0
 
 #
 # Define a base image with all our build dependencies.
 #
 # This base image contains all our target Postgres versions.
 #
-FROM debian:bullseye-slim as base
+FROM debian:${DEBIAN}-slim as base
 
 ARG PGVERSION
+ARG DEBIAN
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -64,7 +67,7 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt bullseye-pgdg main ${PGVERSION}" > /etc/apt/sources.list.d/pgdg.list
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt ${DEBIAN}-pgdg main ${PGVERSION}" > /etc/apt/sources.list.d/pgdg.list
 
 # bypass initdb of a "main" cluster
 RUN echo 'create_main_cluster = false' | sudo tee -a /etc/postgresql-common/createcluster.conf
@@ -84,7 +87,8 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 FROM base as citus
 
 ARG PGVERSION
-ARG CITUSTAG=v11.1.2
+ARG DEBIAN
+ARG CITUSTAG
 
 ENV PG_CONFIG /usr/lib/postgresql/${PGVERSION}/bin/pg_config
 
@@ -92,7 +96,7 @@ RUN git clone -b ${CITUSTAG} --depth 1 https://github.com/citusdata/citus.git /u
 WORKDIR /usr/src/citus
 
 RUN ./configure
-RUN make -s clean && make -s -j8 install
+RUN cd /usr/src/citus && make -s clean && make -s -j8 install
 
 #
 # On-top of the base build-dependencies image, now we can build
@@ -102,6 +106,7 @@ RUN make -s clean && make -s -j8 install
 FROM citus as build
 
 ARG PGVERSION
+ARG DEBIAN
 
 ENV PG_CONFIG /usr/lib/postgresql/${PGVERSION}/bin/pg_config
 
@@ -111,7 +116,10 @@ COPY Makefile ./
 COPY Makefile.azure ./
 COPY Makefile.citus ./
 COPY ./src/ ./src
-COPY ./src/bin/pg_autoctl/git-version.h ./src/bin/pg_autoctl/git-version.h
+#COPY ./src/bin/pg_autoctl/git-version.h ./src/bin/pg_autoctl/git-version.h
+#-- run this from git repo root
+#echo "#define GIT_VERSION '$(git  describe --abbrev=0)-$(git rev-parse --short HEAD)'" >  ./src/bin/pg_autoctl/git-version.h 
+
 RUN make -s clean && make -s install -j8
 
 
@@ -122,6 +130,7 @@ RUN make -s clean && make -s install -j8
 FROM build as test
 
 ARG PGVERSION
+ARG DEBIAN
 
 COPY ./tests/ ./tests
 COPY ./valgrind ./valgrind
@@ -136,9 +145,10 @@ ENV PATH /usr/lib/postgresql/${PGVERSION}/bin:/usr/local/sbin:/usr/local/bin:/us
 #
 # And finally our "run" images with the bare minimum for run-time.
 #
-FROM debian:bullseye-slim as run
+FROM debian:${DEBIAN}-slim as run
 
 ARG PGVERSION
+ARG DEBIAN
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -161,7 +171,7 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt bullseye-pgdg main ${PGVERSION}" > /etc/apt/sources.list.d/pgdg.list
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt ${DEBIAN}-pgdg main ${PGVERSION}" > /etc/apt/sources.list.d/pgdg.list
 
 # bypass initdb of a "main" cluster
 RUN echo 'create_main_cluster = false' | sudo tee -a /etc/postgresql-common/createcluster.conf
