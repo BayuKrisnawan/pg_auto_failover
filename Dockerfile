@@ -118,7 +118,7 @@ COPY Makefile.citus ./
 COPY ./src/ ./src
 #COPY ./src/bin/pg_autoctl/git-version.h ./src/bin/pg_autoctl/git-version.h
 #-- run this from git repo root
-#echo "#define GIT_VERSION '$(git  describe --abbrev=0)-$(git rev-parse --short HEAD)'" >  ./src/bin/pg_autoctl/git-version.h 
+#echo "#define GIT_VERSION '2.1-$(git rev-parse --short HEAD)'" >  ./src/bin/pg_autoctl/git-version.h 
 
 RUN make -s clean && make -s install -j8
 
